@@ -5,12 +5,11 @@ from database import (
     init_db,
     add_student,
     get_all_students,
-    get_student_by_id,
     update_student,
     delete_student,
 )
 
-# Page Configuration
+# 1. Page Configuration (Must be the first Streamlit command)
 st.set_page_config(
     page_title="Student Management System",
     page_icon="🎓",
@@ -18,8 +17,12 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# Initialize Database
-init_db()
+# 2. Initialize SQLite Database Safely
+try:
+    init_db()
+except Exception as e:
+    st.error(f"Failed to initialize database: {e}")
+    st.stop()
 
 # Constants
 DEPARTMENTS = [
@@ -34,13 +37,12 @@ STATUS_OPTIONS = ["Active", "Graduated", "On Leave", "Suspended"]
 
 
 def validate_inputs(student_id: str, full_name: str, email: str, gpa: float) -> tuple[bool, str]:
-    """Validate user inputs before saving to database."""
+    """Validate user inputs before database operations."""
     if not student_id.strip():
         return False, "Student ID cannot be empty."
     if not full_name.strip() or len(full_name.strip()) < 2:
         return False, "Please enter a valid full name (at least 2 characters)."
-    email_pattern = r"^[\w\.-]+@[\w\.-]+\.\w+$"
-    if not re.match(email_pattern, email.strip()):
+    if not re.match(r"^[\w\.-]+@[\w\.-]+\.\w+$", email.strip()):
         return False, "Please enter a valid email address."
     if not (0.0 <= gpa <= 4.0):
         return False, "GPA must be between 0.00 and 4.00."
@@ -48,14 +50,27 @@ def validate_inputs(student_id: str, full_name: str, email: str, gpa: float) -> 
 
 
 def main():
-    # Header
-    st.title("🎓 Student Management System")
-    st.markdown("Manage student records, track academic performance, and export institutional data.")
-    st.divider()
+    # Sidebar Navigation
+    st.sidebar.title("🎓 Navigation")
+    menu = st.sidebar.radio(
+        "Select Action",
+        ["View", "Add", "Update", "Delete"],
+        index=0,
+    )
+    st.sidebar.divider()
+    st.sidebar.caption("Student Management System • Cloud Ready")
 
-    # Fetch all records for metrics
-    all_records = get_all_students()
-    df_all = pd.DataFrame(all_records)
+    # Main Header
+    st.title("🎓 Student Management System")
+
+    # Fetch all records once for metrics and dropdowns
+    try:
+        all_students = get_all_students()
+    except Exception as e:
+        st.error(f"Error loading student records: {e}")
+        all_students = []
+
+    df_all = pd.DataFrame(all_students)
 
     # Top KPI Metrics
     col1, col2, col3, col4 = st.columns(4)
@@ -67,22 +82,15 @@ def main():
     col1.metric("Total Students", total_students)
     col2.metric("Active Students", active_students)
     col3.metric("Average GPA", f"{avg_gpa:.2f}")
-    col4.metric("Active Departments", total_depts)
+    col4.metric("Departments", total_depts)
+    st.divider()
 
-    st.markdown("")
+    # =========================================================
+    # 1. VIEW STUDENTS
+    # =========================================================
+    if menu == "View":
+        st.subheader("📊 Student Directory")
 
-    # Navigation Tabs
-    tab_dashboard, tab_add, tab_manage = st.tabs(
-        ["📊 Student Directory", "➕ Add New Student", "✏️ Edit / Delete Student"]
-    )
-
-    # ---------------------------------------------------------
-    # TAB 1: STUDENT DIRECTORY (READ + SEARCH + FILTER + EXPORT)
-    # ---------------------------------------------------------
-    with tab_dashboard:
-        st.subheader("Student Records")
-
-        # Search and Filter Bar
         f_col1, f_col2, f_col3 = st.columns([2, 1, 1])
         with f_col1:
             search_query = st.text_input(
@@ -91,9 +99,17 @@ def main():
                 label_visibility="collapsed",
             )
         with f_col2:
-            dept_filter = st.selectbox("Department", ["All"] + DEPARTMENTS, label_visibility="collapsed")
+            dept_filter = st.selectbox(
+                "Department",
+                ["All"] + DEPARTMENTS,
+                label_visibility="collapsed",
+            )
         with f_col3:
-            status_filter = st.selectbox("Status", ["All"] + STATUS_OPTIONS, label_visibility="collapsed")
+            status_filter = st.selectbox(
+                "Status",
+                ["All"] + STATUS_OPTIONS,
+                label_visibility="collapsed",
+            )
 
         filtered_students = get_all_students(search_query, dept_filter, status_filter)
 
@@ -116,35 +132,35 @@ def main():
                 },
             )
 
-            # Export to CSV
             csv_data = df_filtered[display_cols].to_csv(index=False).encode("utf-8")
             st.download_button(
-                label="📥 Download Filtered Data (CSV)",
+                label="📥 Export to CSV",
                 data=csv_data,
-                file_name="student_records.csv",
+                file_name="students_directory.csv",
                 mime="text/csv",
             )
         else:
-            st.info("No student records found matching your criteria.")
+            st.info("No student records found. Use the **Add** option in the sidebar to create one.")
 
-    # ---------------------------------------------------------
-    # TAB 2: ADD NEW STUDENT (CREATE)
-    # ---------------------------------------------------------
-    with tab_add:
-        st.subheader("Register New Student")
+    # =========================================================
+    # 2. ADD STUDENT
+    # =========================================================
+    elif menu == "Add":
+        st.subheader("➕ Register New Student")
+
         with st.form("add_student_form", clear_on_submit=True):
             c1, c2 = st.columns(2)
             with c1:
                 student_id = st.text_input("Student ID *", placeholder="e.g., STU-2026-001")
-                full_name = st.text_input("Full Name *", placeholder="e.g., Ayesha Rahman")
-                email = st.text_input("Email Address *", placeholder="e.g., ayesha@university.edu")
+                full_name = st.text_input("Full Name *", placeholder="e.g., Jane Doe")
+                email = st.text_input("Email Address *", placeholder="e.g., jane.doe@university.edu")
             with c2:
                 department = st.selectbox("Department *", DEPARTMENTS)
-                semester = st.number_input("Current Semester *", min_value=1, max_value=12, value=1, step=1)
-                gpa = st.number_input("Current GPA (0.00 - 4.00) *", min_value=0.0, max_value=4.0, value=3.50, step=0.01)
+                semester = st.number_input("Semester *", min_value=1, max_value=12, value=1, step=1)
+                gpa = st.number_input("GPA (0.00 - 4.00) *", min_value=0.0, max_value=4.0, value=3.50, step=0.01)
 
             status = st.selectbox("Enrollment Status", STATUS_OPTIONS, index=0)
-            submitted = st.form_submit_button("Save Student Record", type="primary")
+            submitted = st.form_submit_button("Save Student", type="primary")
 
             if submitted:
                 is_valid, error_msg = validate_inputs(student_id, full_name, email, gpa)
@@ -166,81 +182,73 @@ def main():
                     else:
                         st.error(message)
 
-    # ---------------------------------------------------------
-    # TAB 3: EDIT OR DELETE STUDENT (UPDATE & DELETE)
-    # ---------------------------------------------------------
-    with tab_manage:
-        st.subheader("Update or Remove Student Record")
+    # =========================================================
+    # 3. UPDATE STUDENT
+    # =========================================================
+    elif menu == "Update":
+        st.subheader("✏️ Update Student Record")
 
-        if not all_records:
-            st.info("No students available to edit or delete. Add a student first.")
+        if not all_students:
+            st.info("No student records available to update.")
         else:
-            student_options = {
-                f"{s['student_id']} - {s['full_name']}": s["id"] for s in all_records
+            student_map = {
+                f"{s['student_id']} - {s['full_name']}": s for s in all_students
             }
-            selected_label = st.selectbox("Select Student", list(student_options.keys()))
-            selected_id = student_options[selected_label]
-            student_data = get_student_by_id(selected_id)
+            selected_label = st.selectbox("Select Student to Edit", list(student_map.keys()))
+            selected_student = student_map[selected_label]
 
-            if student_data:
-                with st.form("edit_student_form"):
-                    ec1, ec2 = st.columns(2)
-                    with ec1:
-                        edit_student_id = st.text_input("Student ID *", value=student_data["student_id"])
-                        edit_full_name = st.text_input("Full Name *", value=student_data["full_name"])
-                        edit_email = st.text_input("Email Address *", value=student_data["email"])
-                    with ec2:
-                        dept_index = (
-                            DEPARTMENTS.index(student_data["department"])
-                            if student_data["department"] in DEPARTMENTS
-                            else 0
-                        )
-                        edit_department = st.selectbox("Department *", DEPARTMENTS, index=dept_index)
-                        edit_semester = st.number_input(
-                            "Current Semester *",
-                            min_value=1,
-                            max_value=12,
-                            value=int(student_data["semester"]),
-                            step=1,
-                        )
-                        edit_gpa = st.number_input(
-                            "Current GPA *",
-                            min_value=0.0,
-                            max_value=4.0,
-                            value=float(student_data["gpa"]),
-                            step=0.01,
-                        )
-
-                    status_index = (
-                        STATUS_OPTIONS.index(student_data["status"])
-                        if student_data["status"] in STATUS_OPTIONS
+            with st.form("update_student_form"):
+                c1, c2 = st.columns(2)
+                with c1:
+                    edit_student_id = st.text_input("Student ID *", value=selected_student["student_id"])
+                    edit_full_name = st.text_input("Full Name *", value=selected_student["full_name"])
+                    edit_email = st.text_input("Email Address *", value=selected_student["email"])
+                with c2:
+                    dept_idx = (
+                        DEPARTMENTS.index(selected_student["department"])
+                        if selected_student["department"] in DEPARTMENTS
                         else 0
                     )
-                    edit_status = st.selectbox("Enrollment Status", STATUS_OPTIONS, index=status_index)
+                    edit_department = st.selectbox("Department *", DEPARTMENTS, index=dept_idx)
+                    edit_semester = st.number_input(
+                        "Semester *",
+                        min_value=1,
+                        max_value=12,
+                        value=int(selected_student["semester"]),
+                        step=1,
+                    )
+                    edit_gpa = st.number_input(
+                        "GPA (0.00 - 4.00) *",
+                        min_value=0.0,
+                        max_value=4.0,
+                        value=float(selected_student["gpa"]),
+                        step=0.01,
+                    )
 
-                    btn_col1, btn_col2 = st.columns([1, 5])
-                    with btn_col1:
-                        update_btn = st.form_submit_button("Update Record", type="primary")
+                status_idx = (
+                    STATUS_OPTIONS.index(selected_student["status"])
+                    if selected_student["status"] in STATUS_OPTIONS
+                    else 0
+                )
+                edit_status = st.selectbox("Enrollment Status", STATUS_OPTIONS, index=status_idx)
+                updated = st.form_submit_button("Update Student", type="primary")
 
-                    if update_btn:
-                        is_valid, error_msg = validate_inputs(
-                            edit_student_id, edit_full_name, edit_email, edit_gpa
+                if updated:
+                    is_valid, error_msg = validate_inputs(
+                        edit_student_id, edit_full_name, edit_email, edit_gpa
+                    )
+                    if not is_valid:
+                        st.error(error_msg)
+                    else:
+                        success, message = update_student(
+                            record_id=selected_student["id"],
+                            student_id=edit_student_id,
+                            full_name=edit_full_name,
+                            email=edit_email,
+                            department=edit_department,
+                            semester=int(edit_semester),
+                            gpa=float(edit_gpa),
+                            status=edit_status,
                         )
-                        if not is_valid:
-                            st.error(error_msg)
-                        else:
-                            success, message = update_student(
-                                record_id=selected_id,
-                                student_id=edit_student_id,
-                                full_name=edit_full_name,
-                                email=edit_email,
-                                department=edit_department,
-                                semester=int(edit_semester),
-                                gpa=float(edit_gpa),
-                status=edit_status
-            )
-            if success:
-                st.success(message)
-                st.rerun()
-            else:
-                st.error(message)
+                        if success:
+                            st.success(message)
