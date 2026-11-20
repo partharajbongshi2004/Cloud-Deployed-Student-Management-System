@@ -244,23 +244,3 @@ def main():
                 st.rerun()
             else:
                 st.error(message)
-
-# --- DELETE STUDENT ---
-elif menu == "Delete Student":
-    st.subheader("🗑️ Delete Student Record")
-    df = get_all_students()
-    if not df.empty:
-        student_list = df.apply(lambda x: f"{x['id']} - {x['full_name']} ({x['student_id']})", axis=1).tolist()
-        selected_student = st.selectbox("Select Student to Delete", student_list)
-        selected_id = int(selected_student.split(" - ")[0])
-
-        st.warning(f"⚠️ Are you sure you want to permanently delete *{selected_student}*?")
-        if st.button("Confirm Delete", type="primary"):
-            success, message = delete_student(selected_id)
-            if success:
-                st.success(message)
-                st.rerun()
-            else:
-                st.error(message)
-    else:
-        st.info("No student records available to delete.")
