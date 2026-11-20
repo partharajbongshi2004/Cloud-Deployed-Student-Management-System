@@ -230,31 +230,5 @@ def main() -> None:
                     st.success(f"Student '{full_name.strip()}' added successfully!")
                     st.rerun()
 
-    # =========================================================
-    # 3. UPDATE STUDENT
-    # =========================================================
-    elif menu == "Update Student":
-        st.subheader("✏️ Update Student Record")
-
-        if not st.session_state.students:
-            st.info("No students available to update.")
-            return
-
-        student_options = {
-            f"{s['student_id']} - {s['full_name']}": idx
-            for idx, s in enumerate(st.session_state.students)
-        }
-        selected_label = st.selectbox("Select Student", list(student_options.keys()))
-        selected_idx = student_options[selected_label]
-        current_student = st.session_state.students[selected_idx]
-
-        with st.form("update_student_form"):
-            c1, c2 = st.columns(2)
-            with c1:
-                edit_id = st.text_input("Student ID *", value=current_student["student_id"])
-                edit_name = st.text_input("Full Name *", value=current_student["full_name"])
-                edit_email = st.text_input("Email Address *", value=current_student["email"])
-            with c2:
-                dept_idx = (
-                    DEPARTMENTS.index(current_student["department"])
-                    if current_student["department"] in DEPARTMENTS
+if __name__ == "__main__": main()
+      
